@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Homo Topos: Torsion & Hysteresis</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #1a1a1a;
+            color: #e0e0e0;
+            font-family: 'Courier New', Courier, monospace;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+        #canvas-container {
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+            cursor: crosshair;
+        }
+        #ui-container {
+            width: 600px;
+            margin-top: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+        .control-group {
+            text-align: center;
+            width: 45%;
+        }
+        input[type=range] { width: 100%; }
+        h1 { margin: 0 0 10px 0; font-size: 18px; color: #fff; }
+        p { margin: 0; font-size: 12px; color: #888; }
+        .instruction { color: #00ffcc; margin-bottom: 10px; font-weight: bold;}
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
+</head>
+<body>
+
+    <div style="text-align: center; margin-bottom: 10px;">
+        <h1>Simulation II: The Geometry of Love</h1>
+        <p class="instruction">DRAG the BLUE node. Watch the RED node follow.</p>
+        <p>Observe: Path A → B → A does not return to the identity state.</p>
+    </div>
+
+    <div id="canvas-container"></div>
+
+    <div id="ui-container">
+        <div class="control-group">
+            <label>Coupling Strength (k)</label>
+            <input type="range" id="kSlider" min="0.01" max="0.2" step="0.01" value="0.05">
+            <p>Low = Detachment | High = Fusion</p>
+        </div>
+        <div class="control-group">
+            <label>Viscosity (History)</label>
+            <input type="range" id="cSlider" min="0.80" max="0.99" step="0.01" value="0.92">
+            <p>Low = Elastic | High = Hysteresis</p>
+        </div>
+    </div>
+
+    <script>
+        let selfNode, otherNode;
+        let kSlider, cSlider;
+        let trailSelf = [];
+        let trailOther = [];
+        const MAX_TRAIL = 100;
+
+        function setup() {
+            let canvas = createCanvas(600, 400);
+            canvas.parent('canvas-container');
+            
+            kSlider = select('#kSlider');
+            cSlider = select('#cSlider');
+
+            // Initial Positions
+            selfNode = createVector(width/2 - 50, height/2);
+            otherNode = createVector(width/2 + 50, height/2);
+            
+            // Other node has velocity for physics
+            otherNode.vel = createVector(0, 0);
+        }
+
+        function draw() {
+            background(26, 26, 26, 200); // Slight trail fade
+
+            // 1. Update Physics
+            let k = float(kSlider.value()); // Spring constant
+            let damping = float(cSlider.value()); // Damping factor
+
+            if (mouseIsPressed && mouseX > 0 && mouseX < width && mouseY > 0 && mouseY < height) {
+                // User moves Self (Blue)
+                let mouseV = createVector(mouseX, mouseY);
+                // Smoothly lerp towards mouse for "heavy" feel
+                selfNode.lerp(mouseV, 0.2);
+            }
+
+            // Spring Force: F = -k * (position - target)
+            let force = p5.Vector.sub(selfNode, otherNode);
+            force.mult(k);
+            
+            // Apply Force to Other (Red)
+            otherNode.vel.add(force);
+            otherNode.vel.mult(damping); // Friction/Viscosity
+            otherNode.add(otherNode.vel);
+
+            // 2. Manage Trails (The History)
+            if (frameCount % 3 == 0) {
+                trailSelf.push(selfNode.copy());
+                trailOther.push(otherNode.copy());
+                if (trailSelf.length > MAX_TRAIL) trailSelf.shift();
+                if (trailOther.length > MAX_TRAIL) trailOther.shift();
+            }
+
+            // 3. Draw The Bond (Bivector Area)
+            // Visualize the tension between past states
+            noStroke();
+            for (let i = 0; i < trailSelf.length - 1; i++) {
+                // Draw a quad connecting the two trails
+                let alpha = map(i, 0, trailSelf.length, 0, 50);
+                fill(150, 0, 255, alpha); // Purple "Tension" field
+                beginShape();
+                vertex(trailSelf[i].x, trailSelf[i].y);
+                vertex(trailSelf[i+1].x, trailSelf[i+1].y);
+                vertex(trailOther[i+1].x, trailOther[i+1].y);
+                vertex(trailOther[i].x, trailOther[i].y);
+                endShape(CLOSE);
+            }
+
+            // 4. Draw Connectors (The Current Bond)
+            stroke(255, 100);
+            strokeWeight(1);
+            line(selfNode.x, selfNode.y, otherNode.x, otherNode.y);
+
+            // 5. Draw Nodes
+            // SELF (Blue)
+            noStroke();
+            fill(0, 200, 255);
+            ellipse(selfNode.x, selfNode.y, 20, 20);
+            fill(255);
+            textAlign(CENTER);
+            text("U", selfNode.x, selfNode.y + 4); // You
+
+            // OTHER (Red)
+            fill(255, 50, 50);
+            ellipse(otherNode.x, otherNode.y, 20, 20);
+            fill(255);
+            text("I", otherNode.x, otherNode.y + 4); // Other (I for In-law or Individual)
+
+            // 6. Visualization of Hysteresis
+            // Draw trails
+            noFill();
+            strokeWeight(2);
+            stroke(0, 200, 255, 100);
+            beginShape();
+            trailSelf.forEach(v => vertex(v.x, v.y));
+            endShape();
+
+            stroke(255, 50, 50, 100);
+            beginShape();
+            trailOther.forEach(v => vertex(v.x, v.y));
+            endShape();
+        }
+
+        function windowResized() {
+            // centerCanvas();
+        }
+    </script>
+</body>
+</html>
